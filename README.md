@@ -51,10 +51,13 @@ regardless of CORS, so only the json needed to be fetchable.
 - the explanation text comes back as html from nasa, so it goes through a template tag,
   scripts/on-attrs/javascript: hrefs get stripped, links forced to new tab.
 
-## Keys
+## Controls
 
-`←` / `→` or the edge arrows or clicking the image: prev/next day.
-`i`: explanation panel, `h`: hide all chrome, `f`: fullscreen, `esc`: undo both.
+keyboard: `←` / `→` days, `i` explanation, `h` hide chrome, `f` fullscreen, `esc` reset.
+clicking the picture also hides the chrome.
+
+phone: swipe left/right for days, press and hold the picture for the explanation,
+tap it to hide/show the overlay (first tap after holding the picture closes the panel).
 
 ## Open it
 
