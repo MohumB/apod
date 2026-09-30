@@ -52,6 +52,16 @@
       cursor: pointer;
     }
 
+    /* while the full res is still coming down, stretch the 80px preview into
+       its spot and blur it a bit. same aspect so nothing moves when it swaps */
+    #pic.preview {
+      width: 100vw;
+      height: 100vh;
+      height: 100dvh;
+      filter: blur(6px) saturate(1.1);
+      transform: scale(1.03);
+    }
+
     .hidden {
       display: none !important;
       /* ids in the rules below outweigh this class without the !important */
@@ -235,6 +245,14 @@
       });
     }
 
+    // the dynamicimage host resizes for free, so we can ask for a 80px
+    // version of any picture url and have something on screen instantly.
+    // old-style urls without params get no preview treatment.
+    function thumbUrl(u) {
+      var i = u.indexOf('?');
+      return i < 0 ? null : u.slice(0, i) + '?w=80';
+    }
+
     // the explanation and credit fields come back as html from nasa. we only
     // strip anything that could run or reflow the page, nothing fancy.
     function cleanHTML(html) {
@@ -304,10 +322,34 @@
       if (old) old.parentNode.removeChild(old);
 
       var pic = $('pic');
-      pic.src = entry.hdurl;
+      var full = entry.hdurl;
+      var thumb = thumbUrl(full);
+      if (thumb) {
+        pic.classList.add('preview');
+        pic.src = thumb;
+      } else {
+        pic.classList.remove('preview');
+        pic.src = full;
+      }
       pic.alt = entry.title || 'Astronomy Picture of the Day';
       pic.classList.remove('hidden');
       $('status').classList.add('hidden');
+
+      if (thumb) {
+        // quietly load the real one, swap only once it's actually decodable
+        // so there's no half-painted version on screen
+        var loader = new Image();
+        loader.onload = function () {
+          var swap = function () {
+            pic.classList.remove('preview');
+            pic.src = full;
+          };
+          if (loader.decode) loader.decode().then(swap, swap);
+          else swap();
+        };
+        loader.onerror = function () { /* keep the preview up, nothing better coming */ };
+        loader.src = full;
+      }
 
       $('title').textContent = entry.title || '';
       $('date').textContent = prettyDate(d);
@@ -333,9 +375,13 @@
       $('ptitle').textContent = entry.title || '';
       $('psub').textContent = prettyDate(d);
 
-      // warm the cache for both sides so the next arrow is instant
-      getDay(shiftDate(d, -1)).catch(function () { });
-      getDay(shiftDate(d, 1)).catch(function () { });
+      // warm both sides: json, then the image bytes too once we know the url,
+      // so a swipe that keeps going lands on an already-downloaded picture
+      [-1, 1].forEach(function (off) {
+        getDay(shiftDate(d, off)).then(function (nb) {
+          if (nb) { var im = new Image(); im.src = nb.hdurl; }
+        }).catch(function () { });
+      });
     }
 
     function step(n) {

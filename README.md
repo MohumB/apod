@@ -45,6 +45,10 @@ regardless of CORS, so only the json needed to be fetchable.
   back/forward buttons page through the archive for free.
 - every day is cached in localStorage once fetched (past apods don't change) and the two
   neighbors are preloaded, so hitting the arrow feels instant after first visit.
+- on a day change the picture swaps immediately: nasa's image host can resize any url
+  for free, so we slap the 80px version up blurred to full size (blur-up, the usual trick)
+  and quietly switch to the real file once it's downloaded and decoded. nothing moves
+  during the swap because both versions share the aspect ratio.
 - videos: the new api only gives a poster image for `media_type: video`, no youtube
   embed url like the old one did. so a video day shows the poster and a "watch on nasa"
   link. fine for my use.
