@@ -283,6 +283,27 @@
     }
 
     var cur = null; // date we're showing
+    var renderId = 0; // bumps per show(), so late callbacks can tell they're stale
+
+    // remember the Image objects we load. the browser drops memory-cache
+    // entries whose only reference was a garbage-collected Image(), and
+    // then our "is this already downloaded" probe lies about visited days.
+    var imgCache = {};
+    function remember(url) {
+      if (!url) return null;
+      if (!imgCache[url]) {
+        var im = new Image();
+        im.src = url;
+        imgCache[url] = im;
+        var keys = Object.keys(imgCache);
+        if (keys.length > 40) {  // keep it from growing unbounded, drop oldest
+          for (var i = 0; i < keys.length; i++) {
+            if (keys[i] !== url) { delete imgCache[keys[i]]; break; }
+          }
+        }
+      }
+      return imgCache[url];
+    }
 
     // fetch one day. null means "no entry or can't reach nasa"
     async function getDay(iso) {
@@ -329,12 +350,11 @@
       var pic = $('pic');
       var full = entry.hdurl;
       var thumb = thumbUrl(full);
+      var me = ++renderId;
 
-      // kicking the load through a throwaway Image tells us whether the file
-      // is already in the http cache (complete right now = yes), and starts
-      // the download if not
-      var probe = new Image();
-      probe.src = full;
+      // a remembered Image doubles as the downloader and the "do we already
+      // have this" probe; complete right now = yes
+      var probe = remember(full);
       var cached = probe.complete && probe.naturalWidth > 0;
 
       if (cached || !thumb) {
@@ -342,14 +362,15 @@
         pic.classList.remove('preview');
         pic.src = full;
       } else {
-        // cold: tiny same-crop preview now, real file when it's decodable
+        // cold: tiny same-crop preview now, real file when it's ready
         pic.classList.add('preview');
         pic.src = thumb;
+        var swap = function () {
+          if (me !== renderId) return; // user swiped onward, this render is stale
+          pic.classList.remove('preview');
+          pic.src = full;
+        };
         probe.onload = function () {
-          var swap = function () {
-            pic.classList.remove('preview');
-            pic.src = full;
-          };
           if (probe.decode) {
             // decode first so we never paint a half-decoded jpeg, but this
             // promise has been seen to stall on some engines, so never
@@ -395,7 +416,7 @@
       // so a swipe that keeps going lands on an already-downloaded picture
       [-1, 1].forEach(function (off) {
         getDay(shiftDate(d, off)).then(function (nb) {
-          if (nb) { var im = new Image(); im.src = nb.hdurl; }
+          if (nb) remember(nb.hdurl);
         }).catch(function () { });
       });
     }

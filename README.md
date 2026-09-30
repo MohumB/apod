@@ -48,12 +48,16 @@ regardless of CORS, so only the json needed to be fetchable.
 - on a cold day change we slap a tiny blurred preview up first (blur-up). the full urls
   are cropped server side with w/h+fit=clip, so the preview scales w and h by the same
   factor or the aspect would change and the picture would visibly pop when the real one
-  lands. if the file is already in the http cache - preloaded neighbors, revisits - we
-  skip the preview entirely and it snaps in sharp. no scale/transform on the preview
-  either, that was a bug that caused a resize flicker. one landmine found while
-  testing: image.decode() silently never resolves on at least one engine, which would
-  have left people stuck on a blurred picture forever, so the sharp swap races decode
-  against a 1.5s timeout and happens no matter what.
+  lands. if we already have the file we skip the preview entirely and it snaps in
+  sharp. "have it" is checked by keeping the actual Image() objects around in a
+  little url cache - a bare new Image() preload gets garbage collected and the
+  browser drops its memory-cache entry with it, which made an earlier version blur
+  pictures you were literally looking at a second before. no scale/transform on the
+  preview either, that was a bug that caused a resize flicker. one landmine found
+  while testing: image.decode() silently never resolves on at least one engine, so
+  the sharp swap races decode against a 1.5s timeout and happens no matter what.
+  every async swap carries a render counter and drops itself if you've swiped onward
+  in the meantime.
 - videos: the new api only gives a poster image for `media_type: video`, no youtube
   embed url like the old one did. so a video day shows the poster and a "watch on nasa"
   link. fine for my use.
