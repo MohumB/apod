@@ -50,7 +50,10 @@ regardless of CORS, so only the json needed to be fetchable.
   factor or the aspect would change and the picture would visibly pop when the real one
   lands. if the file is already in the http cache - preloaded neighbors, revisits - we
   skip the preview entirely and it snaps in sharp. no scale/transform on the preview
-  either, that was a bug that caused a resize flicker.
+  either, that was a bug that caused a resize flicker. one landmine found while
+  testing: image.decode() silently never resolves on at least one engine, which would
+  have left people stuck on a blurred picture forever, so the sharp swap races decode
+  against a 1.5s timeout and happens no matter what.
 - videos: the new api only gives a poster image for `media_type: video`, no youtube
   embed url like the old one did. so a video day shows the poster and a "watch on nasa"
   link. fine for my use.

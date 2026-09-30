@@ -350,8 +350,15 @@
             pic.classList.remove('preview');
             pic.src = full;
           };
-          if (probe.decode) probe.decode().then(swap, swap);
-          else swap();
+          if (probe.decode) {
+            // decode first so we never paint a half-decoded jpeg, but this
+            // promise has been seen to stall on some engines, so never
+            // wait more than 1.5s on it - swap regardless
+            Promise.race([
+              probe.decode().catch(function () { }),
+              new Promise(function (r) { setTimeout(r, 1500); })
+            ]).then(swap);
+          } else swap();
         };
         probe.onerror = function () { /* nothing better is coming, keep the preview */ };
       }
