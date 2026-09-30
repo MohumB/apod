@@ -362,26 +362,39 @@
         pic.classList.remove('preview');
         pic.src = full;
       } else {
-        // cold: tiny same-crop preview now, real file when it's ready
-        pic.classList.add('preview');
-        pic.src = thumb;
-        var swap = function () {
-          if (me !== renderId) return; // user swiped onward, this render is stale
-          pic.classList.remove('preview');
-          pic.src = full;
+        // cold. the trap here: adding the blur class while #pic still holds
+        // the previous day's sharp picture blurs THAT, since the new source
+        // isn't loaded yet and filters apply instantly to the old frame.
+        // so we only ever paint when one of the two images is actually in:
+        // preview if it wins, sharp as soon as the full one is decoded.
+        var timg = remember(thumb);
+        var fullReady = false;
+        var paint = function () {
+          if (me !== renderId) return; // user moved on, stale
+          if (fullReady || (probe.complete && probe.naturalWidth > 0 && !probe.decode)) {
+            pic.classList.remove('preview');
+            pic.src = full;
+          } else if (timg.complete && timg.naturalWidth > 0) {
+            pic.classList.add('preview');
+            pic.src = thumb;
+          }
+          // neither in yet: the old picture just sits there, sharp, untouched
         };
         probe.onload = function () {
+          // decode first so we never paint a half-decoded jpeg, but this
+          // promise has been seen to stall on some engines, so never
+          // wait more than 1.5s on it - go sharp regardless
           if (probe.decode) {
-            // decode first so we never paint a half-decoded jpeg, but this
-            // promise has been seen to stall on some engines, so never
-            // wait more than 1.5s on it - swap regardless
             Promise.race([
               probe.decode().catch(function () { }),
               new Promise(function (r) { setTimeout(r, 1500); })
-            ]).then(swap);
-          } else swap();
+            ]).then(function () { fullReady = true; paint(); });
+          } else { fullReady = true; paint(); }
         };
-        probe.onerror = function () { /* nothing better is coming, keep the preview */ };
+        probe.onerror = paint;   // maybe full lost the race or failed, check
+        timg.onload = paint;
+        timg.onerror = paint;
+        paint(); // thumb may already be in from an earlier visit
       }
 
       pic.alt = entry.title || 'Astronomy Picture of the Day';
