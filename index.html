@@ -37,7 +37,8 @@
     }
 
     .hidden {
-      display: none;
+      display: none !important;
+      /* ids in the rules below outweigh this class without the !important */
     }
 
     #status {

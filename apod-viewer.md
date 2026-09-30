@@ -58,8 +58,9 @@ regardless of CORS, so only the json needed to be fetchable.
 
 ## Open it
 
-bookmarked `file:///home/barabadi-ai/apod/index.html` as the new tab page. could also
-serve the folder with anything but there's no reason to.
+live on github pages: https://mohumb.github.io/apod/ - that's the one I bookmarked.
+the file also works straight off disk (`file:///home/barabadi-ai/apod/index.html`)
+since nasa's endpoint lets any origin fetch it, pages is just more convenient.
 
 It works, I use it. Poked at the weird cases too (a nonexistent date like sep 31, a
 video day, going back to 1995) and they behave. If nasa ever moves that wp-json
