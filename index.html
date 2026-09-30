@@ -52,14 +52,18 @@
       cursor: pointer;
     }
 
-    /* while the full res is still coming down, stretch the tiny preview into
-       its spot and blur it a bit. no transform/scale here: the preview keeps
-       the exact crop of the real file so swapping in can't move anything */
+    /* the blur lives on .preview, the box on .stretch: stretching the tiny
+       preview to the viewport and letting object-fit contain it produces the
+       exact same rect the full picture lays out to, since both share the
+       native aspect. lighter blur + a 160px source so the dark edges don't
+       fade into the black and read as a smaller picture */
     #pic.preview {
+      filter: blur(3px);
+    }
+    #pic.stretch {
       width: 100vw;
       height: 100vh;
       height: 100dvh;
-      filter: blur(5px);
     }
 
     .hidden {
@@ -247,16 +251,23 @@
 
     // the image host resizes for free. the full urls are cropped to w/h with
     // fit=clip, so the preview has to scale BOTH numbers to stay the same
-    // shape; urls without a w param (some 90s stuff) get no preview.
+    // shape; urls without usable w/h params (some 90s stuff) get no preview.
     function thumbUrl(u) {
       if (u.indexOf('?') < 0) return null;
       var w = /[?&]w=(\d+)/.exec(u);
-      if (!w) return null;
-      var out = u.replace(/([?&])w=\d+/, '$1w=80');
       var h = /[?&]h=(\d+)/.exec(u);
-      if (h) out = out.replace(/([?&])h=\d+/, '$1h=' + Math.round(h[1] * 80 / w[1]));
-      return out;
+      if (!w || !h || +w[1] < 1 || +h[1] < 1) return null; // saw a real ?w=0&h=0 url
+      // 160px is the sweet spot: a few kb, but enough light that a small blur
+      // still reads at the full frame's size - an 80px one bled to the edges
+      // and looked like a smaller picture that popped bigger on sharpen
+      return u.replace(/([?&])w=\d+/, '$1w=160')
+              .replace(/([?&])h=\d+/, '$1h=' + Math.round(h[1] * 160 / w[1]));
     }
+
+    // note: do NOT trust the w/h url params for the real aspect. checked by
+    // hand: a "?w=1772&h=894" url serves 1772x1181. the resizer keeps the
+    // native ratio and h is only a bound, on preview and full alike - which
+    // is what makes the two contain to the same box on their own.
 
     // the explanation and credit fields come back as html from nasa. we only
     // strip anything that could run or reflow the page, nothing fancy.
@@ -357,25 +368,32 @@
       var probe = remember(full);
       var cached = probe.complete && probe.naturalWidth > 0;
 
+      var paintSharp = function () {
+        pic.classList.remove('preview');
+        pic.classList.remove('stretch');
+      };
+
       if (cached || !thumb) {
         // already on the device: show it sharp, no blur step at all
-        pic.classList.remove('preview');
+        paintSharp();
         pic.src = full;
       } else {
         // cold. the trap here: adding the blur class while #pic still holds
         // the previous day's sharp picture blurs THAT, since the new source
         // isn't loaded yet and filters apply instantly to the old frame.
-        // so we only ever paint when one of the two images is actually in:
-        // preview if it wins, sharp as soon as the full one is decoded.
+        // so we only ever paint when one of the two images is actually in.
+        // the stretch box + object-fit gives the preview the same contain
+        // rect the full picture will lay out to (they share the native ratio).
         var timg = remember(thumb);
         var fullReady = false;
         var paint = function () {
           if (me !== renderId) return; // user moved on, stale
           if (fullReady || (probe.complete && probe.naturalWidth > 0 && !probe.decode)) {
-            pic.classList.remove('preview');
+            paintSharp();
             pic.src = full;
           } else if (timg.complete && timg.naturalWidth > 0) {
             pic.classList.add('preview');
+            pic.classList.add('stretch');
             pic.src = thumb;
           }
           // neither in yet: the old picture just sits there, sharp, untouched

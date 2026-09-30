@@ -45,10 +45,13 @@ regardless of CORS, so only the json needed to be fetchable.
   back/forward buttons page through the archive for free.
 - every day is cached in localStorage once fetched (past apods don't change) and the two
   neighbors are preloaded, so hitting the arrow feels instant after first visit.
-- on a cold day change we slap a tiny blurred preview up first (blur-up). the full urls
-  are cropped server side with w/h+fit=clip, so the preview scales w and h by the same
-  factor or the aspect would change and the picture would visibly pop when the real one
-  lands. if we already have the file we skip the preview entirely and it snaps in
+- on a cold day change we slap a tiny blurred preview up first (blur-up): same url
+  with w=160, blurred 3px, stretched to the viewport with object-fit contain - which
+  lays out to exactly the box the full image will later take, because the resizer
+  keeps the native aspect on both (measured, not assumed: the w/h url params do NOT
+  describe the served crop - a ?w=1772&h=894 url serves 1772x1181. don't trust them
+  for sizing). the first version used 80px + 5px blur and the dark blurred edges
+  ate into the black background so it looked like a smaller picture than the final. if we already have the file we skip the preview entirely and it snaps in
   sharp. "have it" is checked by keeping the actual Image() objects around in a
   little url cache - a bare new Image() preload gets garbage collected and the
   browser drops its memory-cache entry with it, which made an earlier version blur
