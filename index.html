@@ -52,14 +52,14 @@
       cursor: pointer;
     }
 
-    /* while the full res is still coming down, stretch the 80px preview into
-       its spot and blur it a bit. same aspect so nothing moves when it swaps */
+    /* while the full res is still coming down, stretch the tiny preview into
+       its spot and blur it a bit. no transform/scale here: the preview keeps
+       the exact crop of the real file so swapping in can't move anything */
     #pic.preview {
       width: 100vw;
       height: 100vh;
       height: 100dvh;
-      filter: blur(6px) saturate(1.1);
-      transform: scale(1.03);
+      filter: blur(5px);
     }
 
     .hidden {
@@ -245,12 +245,17 @@
       });
     }
 
-    // the dynamicimage host resizes for free, so we can ask for a 80px
-    // version of any picture url and have something on screen instantly.
-    // old-style urls without params get no preview treatment.
+    // the image host resizes for free. the full urls are cropped to w/h with
+    // fit=clip, so the preview has to scale BOTH numbers to stay the same
+    // shape; urls without a w param (some 90s stuff) get no preview.
     function thumbUrl(u) {
-      var i = u.indexOf('?');
-      return i < 0 ? null : u.slice(0, i) + '?w=80';
+      if (u.indexOf('?') < 0) return null;
+      var w = /[?&]w=(\d+)/.exec(u);
+      if (!w) return null;
+      var out = u.replace(/([?&])w=\d+/, '$1w=80');
+      var h = /[?&]h=(\d+)/.exec(u);
+      if (h) out = out.replace(/([?&])h=\d+/, '$1h=' + Math.round(h[1] * 80 / w[1]));
+      return out;
     }
 
     // the explanation and credit fields come back as html from nasa. we only
@@ -324,32 +329,36 @@
       var pic = $('pic');
       var full = entry.hdurl;
       var thumb = thumbUrl(full);
-      if (thumb) {
-        pic.classList.add('preview');
-        pic.src = thumb;
-      } else {
+
+      // kicking the load through a throwaway Image tells us whether the file
+      // is already in the http cache (complete right now = yes), and starts
+      // the download if not
+      var probe = new Image();
+      probe.src = full;
+      var cached = probe.complete && probe.naturalWidth > 0;
+
+      if (cached || !thumb) {
+        // already on the device: show it sharp, no blur step at all
         pic.classList.remove('preview');
         pic.src = full;
-      }
-      pic.alt = entry.title || 'Astronomy Picture of the Day';
-      pic.classList.remove('hidden');
-      $('status').classList.add('hidden');
-
-      if (thumb) {
-        // quietly load the real one, swap only once it's actually decodable
-        // so there's no half-painted version on screen
-        var loader = new Image();
-        loader.onload = function () {
+      } else {
+        // cold: tiny same-crop preview now, real file when it's decodable
+        pic.classList.add('preview');
+        pic.src = thumb;
+        probe.onload = function () {
           var swap = function () {
             pic.classList.remove('preview');
             pic.src = full;
           };
-          if (loader.decode) loader.decode().then(swap, swap);
+          if (probe.decode) probe.decode().then(swap, swap);
           else swap();
         };
-        loader.onerror = function () { /* keep the preview up, nothing better coming */ };
-        loader.src = full;
+        probe.onerror = function () { /* nothing better is coming, keep the preview */ };
       }
+
+      pic.alt = entry.title || 'Astronomy Picture of the Day';
+      pic.classList.remove('hidden');
+      $('status').classList.add('hidden');
 
       $('title').textContent = entry.title || '';
       $('date').textContent = prettyDate(d);
