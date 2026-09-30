@@ -293,8 +293,13 @@
       return t.content;
     }
 
-    var cur = null; // date we're showing
+    var cur = null;      // date currently painted
+    var target = null;   // where the user has navigated to. steps bump this
+                         // right away so fast tapping travels even while a
+                         // cold day is still fetching
     var renderId = 0; // bumps per show(), so late callbacks can tell they're stale
+    var lastStep = 0;
+    var STEP_GAP = 90; // ms between steps; just enough to tame keyboard auto-repeat
 
     // remember the Image objects we load. the browser drops memory-cache
     // entries whose only reference was a garbage-collected Image(), and
@@ -353,7 +358,13 @@
       }
 
       cur = d;
-      if (location.hash.slice(1) != d) location.hash = d;
+      if (!target || target == iso) target = d;
+      // replaceState so a 5s travel doesn't bury 50 entries in the back button.
+      // typing a hash by hand still fires hashchange and lands here fine.
+      if (location.hash.slice(1) != d) {
+        try { history.replaceState(null, '', '#' + d); }
+        catch (e) { location.hash = d; }
+      }
 
       var old = $('videolink');
       if (old) old.parentNode.removeChild(old);
@@ -443,30 +454,64 @@
       $('ptitle').textContent = entry.title || '';
       $('psub').textContent = prettyDate(d);
 
-      // warm both sides: json, then the image bytes too once we know the url,
-      // so a swipe that keeps going lands on an already-downloaded picture
-      [-1, 1].forEach(function (off) {
-        getDay(shiftDate(d, off)).then(function (nb) {
-          if (nb) remember(nb.hdurl);
-        }).catch(function () { });
-      });
+      // warm both sides once the user has settled here (json, then the image
+      // bytes too). no warming the middle of a travel run, that's just spam
+      setTimeout(function () {
+        if (target !== d) return;
+        [-1, 1].forEach(function (off) {
+          getDay(shiftDate(d, off)).then(function (nb) {
+            if (nb) remember(nb.hdurl);
+          }).catch(function () { });
+        });
+      }, 700);
     }
 
     function step(n) {
-      if (!cur) return;
-      show(shiftDate(cur, n), n > 0 ? 1 : -1);
+      var base = target || cur;
+      if (!base) return;
+      var now = Date.now();
+      if (now - lastStep < STEP_GAP) return;
+      lastStep = now;
+      target = shiftDate(base, n);
+      show(target, n > 0 ? 1 : -1);
     }
 
-    $('prev').onclick = function () { step(-1); };
-    $('next').onclick = function () { step(1); };
+    // press an arrow and hold: travel that way until released. one step
+    // lands immediately, the repeat starts after a beat so a normal click
+    // stays a single day.
+    function bindTravel(el, dir) {
+      var beat = null, every = null;
+      function stop() { clearTimeout(beat); clearInterval(every); beat = every = null; }
+      el.addEventListener('pointerdown', function (e) {
+        e.preventDefault();
+        step(dir);
+        beat = setTimeout(function () {
+          every = setInterval(function () { step(dir); }, 100);
+        }, 400);
+      });
+      el.addEventListener('pointerup', stop);
+      el.addEventListener('pointercancel', stop);
+      el.addEventListener('pointerleave', stop);
+    }
+    bindTravel($('prev'), -1);
+    bindTravel($('next'), 1);
     $('panelclose').onclick = function () { $('panel').classList.remove('open'); };
+
+    // edges step days, middle toggles the overlay. same on click and tap,
+    // same whether the chrome is visible or hidden (which is the point:
+    // in hide mode the edges are still the nav).
+    function tapZone(x) {
+      if (x < innerWidth * 0.32) step(-1);
+      else if (x > innerWidth * 0.68) step(1);
+      else document.body.classList.toggle('no-chrome');
+    }
 
     var isTouch = matchMedia('(hover: none)').matches;
     if (isTouch) {
-      $('hint').innerHTML = '&middot; <a href="#" onclick="return false">swipe: days &middot; hold: info &middot; tap: hide</a>';
+      $('hint').innerHTML = '&middot; <a href="#" onclick="return false">swipe / tap edges: days &middot; hold: info &middot; tap middle: hide</a>';
     } else {
-      // on desktop a click on the picture now means the same as "h"
-      $('pic').onclick = function () { document.body.classList.toggle('no-chrome'); };
+      $('hint').innerHTML = '&middot; <a href="#" onclick="return false">&larr;/&rarr; or hold arrows to travel, i info, h hide, f fullscreen</a>';
+      $('pic').onclick = function (e) { tapZone(e.clientX); };
     }
 
     // phone gestures: swipe left/right to flip days, hold for the explanation,
@@ -496,11 +541,11 @@
       }
     });
 
-    stage.addEventListener('touchend', function () {
+    stage.addEventListener('touchend', function (e) {
       clearTimeout(holdTimer);
       if (touch && Date.now() - touch.ms < 350) {
         if ($('panel').classList.contains('open')) $('panel').classList.remove('open');
-        else document.body.classList.toggle('no-chrome');
+        else tapZone(e.changedTouches[0].clientX);
       }
       touch = null;
     });
@@ -524,10 +569,11 @@
       }
     });
 
-    // typing a date in the hash jumps to it, browser back/forward works too
+    // typing a date in the hash jumps straight to it (and years back:
+    // #1998-04-12 works from the address bar, that's the time machine)
     window.addEventListener('hashchange', function () {
       var m = /^#(\d{4}-\d{2}-\d{2})$/.exec(location.hash);
-      if (m && m[1] != cur) show(m[1], -1);
+      if (m && m[1] != cur) { target = m[1]; show(m[1], -1); }
     });
 
     var m = /^#(\d{4}-\d{2}-\d{2})$/.exec(location.hash);

@@ -69,11 +69,19 @@ regardless of CORS, so only the json needed to be fetchable.
 
 ## Controls
 
-keyboard: `←` / `→` days, `i` explanation, `h` hide chrome, `f` fullscreen, `esc` reset.
-clicking the picture also hides the chrome.
+keyboard: `←` / `→` days (holding the key travels), `i` explanation, `h` hide chrome,
+`f` fullscreen, `esc` reset. clicking the picture's left/right third steps a day,
+clicking its middle hides the chrome.
 
 phone: swipe left/right for days, press and hold the picture for the explanation,
-tap it to hide/show the overlay (first tap after holding the picture closes the panel).
+tap its edges to step days - also while the overlay is hidden - tap the middle to
+hide/show the chrome (first tap after holding the picture closes the panel).
+
+traveling through time is deliberately gesture-only: hold an arrow on the pc, or
+rattle swipes/taps on the phone, and the days fly by - no calendar dashboard.
+for one big jump, type the date in the hash: `#2001-04-02` from the address bar.
+under the hood, steps bump a target date instantly so tapping faster than the
+network doesn't stall, and rapid taps self-throttle to a sane fetch rate.
 
 there's no real fullscreen api on ios, so on an iphone the move is share -> add to
 home screen, it launches without any browser bars anyway. android chrome hides its
