@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>APOD</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      height: 100%;
+      margin: 0;
+      background: #000;
+      overflow: hidden;
+      font: 15px/1.5 system-ui, sans-serif;
+      color: #eee;
+    }
+
+    #stage {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #pic {
+      max-width: 100vw;
+      max-height: 100vh;
+      object-fit: contain;
+      display: block;
+      cursor: pointer;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    #status {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #999;
+    }
+
+    .arrow {
+      position: fixed;
+      top: 0;
+      bottom: 0;
+      width: 18vw;
+      max-width: 160px;
+      border: 0;
+      background: none;
+      cursor: pointer;
+      z-index: 5;
+      color: rgba(255, 255, 255, .25);
+      font-size: 9vh;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .arrow:hover {
+      color: #fff;
+    }
+
+    #prev {
+      left: 0;
+      padding-left: 1.5vw;
+    }
+
+    #next {
+      right: 0;
+      justify-content: flex-end;
+      padding-right: 1.5vw;
+    }
+
+    #bar {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 4;
+      padding: 14px 18px 12px;
+      background: linear-gradient(transparent, rgba(0, 0, 0, .85) 60%);
+      transition: opacity .35s;
+    }
+
+    #bar h1 {
+      margin: 0;
+      font-size: 17px;
+    }
+
+    #meta {
+      margin-top: 2px;
+      font-size: 12.5px;
+      color: #aaa;
+    }
+
+    #meta a {
+      color: #9cf;
+      text-decoration: none;
+    }
+
+    #videolink {
+      color: #ffb;
+    }
+
+    /* explanation slides in from the right */
+    #panel {
+      position: fixed;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 6;
+      width: min(46rem, 86vw);
+      overflow-y: auto;
+      background: rgba(10, 10, 12, .93);
+      padding: 22px 26px 60px;
+      transform: translateX(100%);
+      transition: transform .25s ease;
+    }
+
+    #panel.open {
+      transform: none;
+    }
+
+    #panel h2 {
+      margin: 0 0 2px;
+    }
+
+    #panel .sub {
+      color: #999;
+      font-size: 12.5px;
+      margin-bottom: 16px;
+    }
+
+    #panel .body {
+      color: #ddd;
+    }
+
+    #panel a {
+      color: #9cf;
+    }
+
+    #panel .close {
+      position: sticky;
+      top: 0;
+      float: right;
+      border: 0;
+      background: rgba(255, 255, 255, .08);
+      color: #ccc;
+      border-radius: 6px;
+      padding: 4px 10px;
+      cursor: pointer;
+    }
+
+    body.no-chrome .arrow,
+    body.no-chrome #bar {
+      opacity: 0;
+      pointer-events: none;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="stage"><img id="pic" class="hidden" alt=""></div>
+  <div id="status">loading...</div>
+
+  <button class="arrow" id="prev" aria-label="previous day">&lsaquo;</button>
+  <button class="arrow" id="next" aria-label="next day">&rsaquo;</button>
+
+  <div id="bar">
+    <h1 id="title"></h1>
+    <div id="meta">
+      <span id="date"></span> &middot; <span id="credit"></span>
+      <span id="hint">&middot; <a href="#" onclick="return false">&larr;/&rarr; days, i info, h hide, f
+          fullscreen</a></span>
+    </div>
+  </div>
+
+  <aside id="panel">
+    <button class="close" id="panelclose">esc</button>
+    <h2 id="ptitle"></h2>
+    <div class="sub" id="psub"></div>
+    <div class="body" id="pbody"></div>
+  </aside>
+
+  <script>
+    var API = 'https://science.nasa.gov/wp-json/wp/v2/apod-basic/';
+
+    function $(id) { return document.getElementById(id); }
+
+    function shiftDate(iso, days) {
+      // noon UTC so month math can't trip over timezones
+      var d = new Date(iso + 'T12:00:00Z');
+      d.setUTCDate(d.getUTCDate() + days);
+      return d.toISOString().slice(0, 10);
+    }
+    function yymmdd(iso) {
+      return iso.slice(2, 4) + iso.slice(5, 7) + iso.slice(8, 10);
+    }
+    function today() {
+      return new Date().toISOString().slice(0, 10);
+    }
+    function prettyDate(iso) {
+      var d = new Date(iso + 'T12:00:00Z');
+      return d.toLocaleDateString(undefined, {
+        weekday: 'short', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC'
+      });
+    }
+
+    // the explanation and credit fields come back as html from nasa. we only
+    // strip anything that could run or reflow the page, nothing fancy.
+    function cleanHTML(html) {
+      var t = document.createElement('template');
+      t.innerHTML = html || '';
+      var bad = t.content.querySelectorAll('script,style,iframe,object,embed,form,link,meta');
+      for (var i = 0; i < bad.length; i++) bad[i].remove();
+      var all = t.content.querySelectorAll('*');
+      for (var i = 0; i < all.length; i++) {
+        var attrs = all[i].attributes;
+        for (var j = attrs.length - 1; j >= 0; j--) {
+          var name = attrs[j].name, val = attrs[j].value;
+          if (/^on/i.test(name)) all[i].removeAttribute(name);
+          if (name == 'href' && /^\s*javascript:/i.test(val)) all[i].removeAttribute(name);
+        }
+      }
+      var links = t.content.querySelectorAll('a[href]');
+      for (var i = 0; i < links.length; i++) {
+        links[i].target = '_blank';
+        links[i].rel = 'noopener';
+      }
+      return t.content;
+    }
+
+    var cur = null; // date we're showing
+
+    // fetch one day. null means "no entry or can't reach nasa"
+    async function getDay(iso) {
+      var key = 'apod:' + iso;
+      try {
+        var hit = localStorage.getItem(key);
+        if (hit) return JSON.parse(hit);
+      } catch (e) { }
+      var res;
+      try {
+        res = await fetch(API + yymmdd(iso));
+      } catch (e) {
+        return null;
+      }
+      if (!res.ok) return null;  // bad or missing dates come back 400/404
+      var j = await res.json();
+      if (Array.isArray(j)) j = j[0];
+      if (!j || !j.hdurl) return null;
+      try {
+        localStorage.setItem(key, JSON.stringify(j));  // past apods don't change, cache forever
+      } catch (e) { }
+      return j;
+    }
+
+    async function show(iso, dir) {
+      var d = iso, entry = null, tries = 0;
+      // apod occasionally skips a day (or you landed on a 404-ish date), keep walking
+      while (tries++ < 400) {
+        entry = await getDay(d);
+        if (entry) break;
+        d = shiftDate(d, dir);
+      }
+      if (!entry) {
+        $('status').textContent = 'Nothing found near ' + iso + '. Network down?';
+        return;
+      }
+
+      cur = d;
+      if (location.hash.slice(1) != d) location.hash = d;
+
+      var old = $('videolink');
+      if (old) old.parentNode.removeChild(old);
+
+      var pic = $('pic');
+      pic.src = entry.hdurl;
+      pic.alt = entry.title || 'Astronomy Picture of the Day';
+      pic.classList.remove('hidden');
+      $('status').classList.add('hidden');
+
+      $('title').textContent = entry.title || '';
+      $('date').textContent = prettyDate(d);
+      var credit = $('credit');
+      credit.replaceChildren.apply(credit, cleanHTML(entry.credit || entry.copyright || '').childNodes);
+
+      if ((entry.media_type || 'image') != 'image' && entry.permalink) {
+        // the new api only gives us a poster image for videos, no embed url.
+        // good enough, just link out.
+        var a = document.createElement('a');
+        a.id = 'videolink';
+        a.href = entry.permalink;
+        a.target = '_blank';
+        a.textContent = '▶ video, watch on nasa';
+        credit.parentNode.insertBefore(a, credit);
+        credit.parentNode.insertBefore(document.createTextNode(' · '), a.nextSibling);
+      }
+
+      document.title = (entry.title || 'APOD') + ' - ' + d;
+
+      var body = $('pbody');
+      body.replaceChildren.apply(body, cleanHTML(entry.explanation || '').childNodes);
+      $('ptitle').textContent = entry.title || '';
+      $('psub').textContent = prettyDate(d);
+
+      // warm the cache for both sides so the next arrow is instant
+      getDay(shiftDate(d, -1)).catch(function () { });
+      getDay(shiftDate(d, 1)).catch(function () { });
+    }
+
+    function step(n) {
+      if (!cur) return;
+      show(shiftDate(cur, n), n > 0 ? 1 : -1);
+    }
+
+    $('prev').onclick = function () { step(-1); };
+    $('next').onclick = function () { step(1); };
+    $('pic').onclick = function () { step(1); };
+    $('panelclose').onclick = function () { $('panel').classList.remove('open'); };
+
+    document.addEventListener('keydown', function (e) {
+      if (e.target.closest('#panel')) {
+        if (e.key == 'Escape') $('panel').classList.remove('open');
+        return;
+      }
+      if (e.key == 'ArrowLeft') step(-1);
+      else if (e.key == 'ArrowRight') step(1);
+      else if (e.key == 'i' || e.key == 'I' || e.key == '?') $('panel').classList.toggle('open');
+      else if (e.key == 'Escape') {
+        $('panel').classList.remove('open');
+        document.body.classList.remove('no-chrome');
+      }
+      else if (e.key == 'h' || e.key == 'H') document.body.classList.toggle('no-chrome');
+      else if (e.key == 'f' || e.key == 'F') {
+        if (document.fullscreenElement) document.exitFullscreen();
+        else document.documentElement.requestFullscreen();
+      }
+    });
+
+    // typing a date in the hash jumps to it, browser back/forward works too
+    window.addEventListener('hashchange', function () {
+      var m = /^#(\d{4}-\d{2}-\d{2})$/.exec(location.hash);
+      if (m && m[1] != cur) show(m[1], -1);
+    });
+
+    var m = /^#(\d{4}-\d{2}-\d{2})$/.exec(location.hash);
+    show(m ? m[1] : today(), -1);
+  </script>
+</body>
+
+</html>
