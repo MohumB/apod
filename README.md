@@ -59,6 +59,11 @@ clicking the picture also hides the chrome.
 phone: swipe left/right for days, press and hold the picture for the explanation,
 tap it to hide/show the overlay (first tap after holding the picture closes the panel).
 
+there's no real fullscreen api on ios, so on an iphone the move is share -> add to
+home screen, it launches without any browser bars anyway. android chrome hides its
+own bar as soon as you swipe. sizing uses dvh so the picture always fits the part
+of the screen you can actually see.
+
 ## Open it
 
 live on github pages: https://mohumb.github.io/apod/ - that's the one I bookmarked.

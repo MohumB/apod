@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>APOD</title>
   <style>
     * {
@@ -30,11 +30,16 @@
       -webkit-touch-callout: none;
       user-select: none;
       -webkit-user-select: none;
+      /* vh = big viewport that hides under the phone browser bars, dvh = what
+         you can actually see. browsers that don't know dvh keep the vh fallback */
+      height: 100vh;
+      height: 100dvh;
     }
 
     #pic {
       max-width: 100vw;
       max-height: 100vh;
+      max-height: 100dvh;
       object-fit: contain;
       display: block;
       cursor: pointer;
@@ -94,7 +99,7 @@
       right: 0;
       bottom: 0;
       z-index: 4;
-      padding: 14px 18px 12px;
+      padding: 14px calc(18px + env(safe-area-inset-right)) calc(12px + env(safe-area-inset-bottom)) calc(18px + env(safe-area-inset-left));
       background: linear-gradient(transparent, rgba(0, 0, 0, .85) 60%);
       transition: opacity .35s;
     }
@@ -129,7 +134,7 @@
       width: min(46rem, 86vw);
       overflow-y: auto;
       background: rgba(10, 10, 12, .93);
-      padding: 22px 26px 60px;
+      padding: calc(22px + env(safe-area-inset-top)) calc(26px + env(safe-area-inset-right)) calc(60px + env(safe-area-inset-bottom)) 26px;
       transform: translateX(100%);
       transition: transform .25s ease;
     }
